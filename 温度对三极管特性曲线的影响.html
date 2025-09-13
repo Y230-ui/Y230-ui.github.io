@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>温度对三极管特性曲线的影响（含温度敏感负载线与Q点）</title>
+    <!-- 引入Chart.js用于绘制特性曲线 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 基础样式设置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+            background-color: #f9f9f9;
+            font-size: 14px;
+        }
+        
+        .main-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 22px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        p {
+            font-size: 13px;
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+        
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 15px auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        h6 {
+            font-size: 12px;
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        
+        .controls label {
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .feedback-text {
+            font-size: 12px;
+            text-align: center;
+            color: #555;
+            width: 100px;
+        }
+        
+        #temp-slider {
+            flex-grow: 1;
+            max-width: 500px;
+            height: 6px;
+        }
+        
+        .charts-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+        
+        #info-box {
+            background-color: #e8f4f8;
+            border-left: 3px solid #3498db;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        #info-box p {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        /* Q点与负载线样式 */
+        .q-point-label {
+            font-weight: bold;
+            color: #ff0000;
+        }
+        .load-line-label {
+            font-weight: bold;
+            color: #666666;
+        }
+        .dc-load-line-label {
+            font-weight: bold;
+            color: #9b59b6;
+        }
+        .temp-param-label {
+            font-style: italic;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <h1>温度对三极管特性曲线的影响</h1>
+        <p>由于半导体材料受温度影响较大，因此三极管的参数几乎都与温度相关。当三极管工作环境温度变化时，其输入、输出特性曲线会产生变化。当温度升高时</p>
+        
+        <p>(1）是集电区的平衡少子与基区的平衡少子在集电结反偏下的漂移运动而形成的。本征激发加剧，平衡少子浓度增大，参与漂移运动的平衡少子数目增多，使得增大。</p>
+
+        <p>(2）三极管的输入特性曲线正向部分左移， PN 结导通压降会随温度的升高而降低。</p>
+
+        <p>(3）相同基极电流的条件下，集电极电流增大，即三极管的共射电流放大系数增大。这是因为，温度升高导致发射极多子运动剧烈，发射极注入的载流子在基极复合比例减小，所能被集电极收集的非平衡少子则更多。非平衡少子的漂移电流增大，且基极复合电流减小，因此随温度上升而增大。</p>
+        
+        <div class="controls">
+            <label for="temp-slider">调节环境温度：</label>
+            <div class="slider-container">
+                <span id="feedback-left" class="feedback-text">低温<br>(0℃)</span>
+                <input type="range" id="temp-slider" min="0" max="60" step="1" value="25">
+                <span id="feedback-right" class="feedback-text">高温<br>(60℃)</span>
+            </div>
+        </div>
+        
+        <div class="charts-container">
+            <!-- 输入特性曲线（含温度敏感负载线与Q点） -->
+            <div class="chart-container">
+                <canvas id="input-characteristic-canvas"></canvas>
+            </div>
+            <h6>图1:输入特性曲线（Vce=0V/1V/5V/10V）+ <span class="load-line-label">输入负载线（Vbb=2V，Rb随温度变化）</span> + <span class="dc-load-line-label">输入回路直流负载线</span>，<span class="q-point-label">Q点：Vce=5V曲线与负载线交点</span></h6>
+            
+            <!-- 输出特性曲线（含温度敏感负载线与Q点） -->
+            <div class="chart-container">
+                <canvas id="output-characteristic-canvas"></canvas>
+            </div>
+            <h6>图2:输出特性曲线（Ib=0μA/10μA/20μA/30μA/40μA）+ <span class="load-line-label">输出负载线（Vcc=10V，Rc随温度变化）</span>，<span class="q-point-label">Q点：Ib=20μA曲线与负载线交点</span></h6>
+        </div>
+        
+        <div id="info-box">
+            <p><strong>当前状态：</strong><span id="status-text">常温(25℃) - 特性稳定</span></p>
+            <p><strong>当前电阻值：</strong><span id="resistor-info">Rb≈75.0kΩ（α=0.002/℃），Rc≈2.00kΩ（α=0.002/℃）</span></p>
+            <p><strong>输入Q点（Vce=5V）：</strong><span id="input-q-info">Vbe≈0.70V，Ib≈17.3μA（负载线与曲线交点）</span></p>
+            <p><strong>输出Q点（Ib=20μA）：</strong><span id="output-q-info">Uce=5.0V，Ic≈2.5mA（β≈125，负载线与曲线交点）</span></p>
+            <p><strong>温度影响：</strong>温度升高→电阻增大（负载线变平缓）+ 特性曲线偏移→Q点双重偏移；温度降低则相反。</p>
+        </div>
+    </div>
+
+    <script>
+        // 字体大小响应式调整
+        function resetHtmlFontSize(){
+            const baseWidth = 15;
+            const clientWidth = document.documentElement.clientWidth || window.innerWidth;
+            const fontSize = Math.max(12, clientWidth / baseWidth);
+            document.documentElement.style.fontSize = fontSize + 'px';
+        }
+        resetHtmlFontSize();
+        window.onresize = resetHtmlFontSize;
+
+        // 三极管特性曲线+温度敏感负载线+Q点逻辑
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. 基础参数定义
+            const inputCtx = document.getElementById('input-characteristic-canvas').getContext('2d');
+            const outputCtx = document.getElementById('output-characteristic-canvas').getContext('2d');
+            
+            // 电路参数（电源固定，电阻随温度变化）
+            const Vbb = 2;     // 基极电源（V）
+            const Vcc = 10;    // 集电极电源（V）
+            const RbBase = 75000;  // 基极电阻（Ω，75kΩ）
+            const RcBase = 2000;   // 集电极电阻（Ω，2kΩ）
+            const alpha = 0.002;   // 电阻温度系数（/℃）
+            
+            // 输入特性基础数据 - 增加采样点密度以提高精度（从121点增加到601点）
+            const vbeData = Array.from({length: 601}, (_, i) => (i * 0.002).toFixed(3)); 
+            const vceValues = [0, 1, 5, 10]; // 输入曲线Vce值（Q点对应Vce=5V，索引2）
+            const inputColors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12'];
+            
+            // 输出特性基础数据
+            const ucePoints = 21; // 输出X轴：0~10V，步长0.5V
+            const uceData = Array.from({length: 500}, (_, i) => i * 0.5);
+            const ibValues = [0, 10, 20, 30, 40]; // 输出曲线Ib值（Q点对应Ib=20μA，索引2）
+            const outputColors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6'];
+
+            // 3. 初始化图表（含特性曲线、温度敏感负载线、Q点）
+            let inputChart = initInputChart(25);
+            let outputChart = initOutputChart(25);
+
+            // 4. 温度滑块交互逻辑
+            const slider = document.getElementById('temp-slider');
+            const statusText = document.getElementById('status-text');
+            const resistorInfo = document.getElementById('resistor-info');
+            const inputQInfo = document.getElementById('input-q-info');
+            const outputQInfo = document.getElementById('output-q-info');
+            
+            slider.addEventListener('input', function() {
+                const temp = parseInt(this.value);
+                
+                // 计算当前温度下的电阻值
+                const [RbCurrent, RcCurrent] = calculateResistorAtTemp(temp);
+                
+                // 生成当前温度下的负载线
+                const inputLoadLineData = generateInputLoadLineData(temp);
+                const inputDCLoadLineData = generateInputDCLoadLineData(temp); // 输入回路直流负载线
+                const outputLoadLineData = generateOutputLoadLineData(temp);
+                
+                // 生成当前温度下的特性曲线
+                const inputDatasets = generateInputDatasets(temp);
+                const outputDatasets = generateOutputDatasets(temp);
+                
+                // 计算当前温度下的Q点 - 使用改进的高精度算法
+                const inputQDatasets = getInputQDatasets(temp, inputDatasets, inputLoadLineData);
+                const outputQDatasets = getOutputQDatasets(temp, outputDatasets, outputLoadLineData);
+                
+                // 更新图表
+                inputChart.data.datasets = [...inputDatasets, inputLoadLineData, inputDCLoadLineData, inputQDatasets];
+                inputChart.update();
+                outputChart.data.datasets = [...outputDatasets, outputLoadLineData, outputQDatasets];
+                outputChart.update();
+                
+                // 更新状态、电阻值、Q点信息
+                updateStatusAndParams(temp, RbCurrent, RcCurrent, inputQDatasets, outputQDatasets);
+            });
+
+            // 计算当前温度下的电阻值
+            function calculateResistorAtTemp(temperature) {
+                const deltaTemp = temperature - 25; // 与常温25℃的温差
+                // 电阻温度公式：Rt = Rbase * (1 + α*ΔT)
+                const RbCurrent = RbBase * (1 + alpha * deltaTemp);
+                const RcCurrent = RcBase * (1 + alpha * deltaTemp);
+                return [RbCurrent, RcCurrent];
+            }
+
+            // 生成输入负载线数据（随温度变化）
+            function generateInputLoadLineData(temperature) {
+                // 获取当前温度下的基极电阻
+                const [RbCurrent] = calculateResistorAtTemp(temperature);
+                // 输入负载线方程：Ib = (Vbb - Vbe) / RbCurrent（单位：A→μA）
+                const loadLineIb = vbeData.map(vbe => {
+                    const vbeVal = parseFloat(vbe);
+                    if (vbeVal > Vbb) return null; // Vbe > Vbb时Ib为负，无意义
+                    const ib_A = (Vbb - vbeVal) / RbCurrent;
+                    return ib_A * 1e6; // 转换为μA
+                });
+                
+                // 构建负载线数据集（标注当前电阻值）
+                return {
+                    label: `输入负载线（Vbb=${Vbb}V, Rb≈${(RbCurrent/1000).toFixed(1)}kΩ）`,
+                    data: loadLineIb,
+                    borderColor: '#666666',
+                    borderWidth: 2,
+                    borderDash: [5, 5], // 虚线样式
+                    pointRadius: 0,
+                    tension: 0, // 直线
+                    fill: false,
+                    order: 1 // 绘制顺序：特性曲线之后
+                };
+            }
+
+            // 生成输入回路直流负载线数据（随温度变化）
+            function generateInputDCLoadLineData(temperature) {
+                // 获取当前温度下的基极电阻
+                const [RbCurrent] = calculateResistorAtTemp(temperature);
+                // 输入回路直流负载线方程：Ib = (Vbb - Vbe) / RbCurrent（单位：A→μA）
+                const loadLineIb = vbeData.map(vbe => {
+                    const vbeVal = parseFloat(vbe);
+                    if (vbeVal > Vbb) return null; // Vbe > Vbb时Ib为负，无意义
+                    const ib_A = (Vbb - vbeVal) / RbCurrent;
+                    return ib_A * 1e6; // 转换为μA
+                });
+                
+                // 构建直流负载线数据集（使用不同样式）
+                return {
+                    label: `输入回路直流负载线`,
+                    data: loadLineIb,
+                    borderColor: '#9b59b6', // 紫色，与原有负载线区分
+                    borderWidth: 2,
+                    borderDash: [2, 2], // 更密集的虚线样式
+                    pointRadius: 0,
+                    tension: 0, // 直线
+                    fill: false,
+                    order: 1 // 绘制顺序：特性曲线之后
+                };
+            }
+
+            // 生成输出负载线数据（随温度变化）
+            function generateOutputLoadLineData(temperature) {
+                // 获取当前温度下的集电极电阻
+                const [_, RcCurrent] = calculateResistorAtTemp(temperature);
+                // 输出负载线方程：Ic = (Vcc - Uce) / RcCurrent（单位：A→mA）
+                const loadLineIc = uceData.map(uce => {
+                    if (uce > Vcc) return null; // Uce > Vcc时Ic为负，无意义
+                    const ic_A = (Vcc - uce) / RcCurrent;
+                    return ic_A * 1e3; // 转换为mA
+                });
+                
+                // 构建负载线数据集（标注当前电阻值）
+                return {
+                    label: `输出负载线（Vcc=${Vcc}V, Rc≈${(RcCurrent/1000).toFixed(2)}kΩ）`,
+                    data: loadLineIc,
+                    borderColor: '#666666',
+                    borderWidth: 2,
+                    borderDash: [5, 5], // 虚线样式
+                    pointRadius: 0,
+                    tension: 0, // 直线
+                    fill: false,
+                    order: 1 // 绘制顺序：特性曲线之后
+                };
+            }
+
+            // 初始化输入图表
+            function initInputChart(initTemp) {
+                const inputLoadLineData = generateInputLoadLineData(initTemp);
+                const inputDCLoadLineData = generateInputDCLoadLineData(initTemp); // 直流负载线
+                const inputDatasets = generateInputDatasets(initTemp);
+                const inputQDatasets = getInputQDatasets(initTemp, inputDatasets, inputLoadLineData);
+                
+                return new Chart(inputCtx, {
+                    type: 'line',
+                    data: {
+                        labels: vbeData,
+                        datasets: [...inputDatasets, inputLoadLineData, inputDCLoadLineData, inputQDatasets] // 曲线→负载线→直流负载线→Q点
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear', 
+                                title: {display: true, text: '基极-发射极电压 Vbe (V)', font: {size: 12}},
+                                min: 0,
+                                max: 1.2,
+                                ticks: {font: {size: 10}, stepSize: 0.2, callback: function(value) {
+                                    return value.toFixed(1); // 确保X轴显示一位小数
+                                }}
+                            },
+                            y: {
+                                title: {display: true, text: '基极电流 Ib (μA)', font: {size: 12}},
+                                min: 0,
+                                max: 30, 
+                                ticks: {font: {size: 10}, stepSize: 5}
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    font: {size: 11},
+                                    callback: ctx => {
+                                        if (ctx.dataset.label.includes('负载线')) return ctx.dataset.label;
+                                        if (ctx.dataset.label.includes('Q点')) return ctx.dataset.label;
+                                        return `Vce = ${vceValues[ctx.datasetIndex]} V`;
+                                    }
+                                },
+                                position: 'top',
+                                align: 'end'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        if (ctx.dataset.label.includes('直流负载线')) {
+                                            return `Ib（直流负载线）= ${ctx.raw ? ctx.raw.toFixed(2) : 0} μA`;
+                                        }
+                                        if (ctx.dataset.label.includes('负载线') && !ctx.dataset.label.includes('直流')) {
+                                            return `Ib（负载线）= ${ctx.raw ? ctx.raw.toFixed(2) : 0} μA`;
+                                        }
+                                        if (ctx.dataset.label.includes('Q点')) {
+                                            return `Q点：Vbe=${parseFloat(ctx.label).toFixed(3)}V, Ib=${ctx.raw.toFixed(2)}μA`;
+                                        }
+                                        return `Ib（Vce=${vceValues[ctx.datasetIndex]}V）= ${ctx.raw.toFixed(2)} μA`;
+                                    }
+                                }
+                            }
+                        },
+                        tension: 0.2,
+                        animation: {duration: 300}
+                    }
+                });
+            }
+
+            // 初始化输出图表
+            function initOutputChart(initTemp) {
+                const outputLoadLineData = generateOutputLoadLineData(initTemp);
+                const outputDatasets = generateOutputDatasets(initTemp);
+                const outputQDatasets = getOutputQDatasets(initTemp, outputDatasets, outputLoadLineData);
+                
+                return new Chart(outputCtx, {
+                    type: 'line',
+                    data: {
+                        labels: uceData,
+                        datasets: [...outputDatasets, outputLoadLineData, outputQDatasets] // 曲线→负载线→Q点
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {display: true, text: '集电极-发射极电压 Uce (V)', font: {size: 12}},
+                                min: 0,
+                                max: 10,
+                                ticks: {font: {size: 10}, stepSize: 1}
+                            },
+                            y: {
+                                title: {display: true, text: '集电极电流 Ic (mA)', font: {size: 12}},
+                                min: 0,
+                                max: 6, // 显示负载线与Y轴交点
+                                ticks: {font: {size: 10}, stepSize: 1}
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    font: {size: 11},
+                                    callback: ctx => {
+                                        if (ctx.dataset.label.includes('负载线')) return ctx.dataset.label;
+                                        if (ctx.dataset.label.includes('Q点')) return ctx.dataset.label;
+                                        return `Ib = ${ibValues[ctx.datasetIndex]} μA`;
+                                    }
+                                },
+                                position: 'top',
+                                align: 'end'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        if (ctx.dataset.label.includes('负载线')) {
+                                            return `Ic（负载线）= ${ctx.raw ? ctx.raw.toFixed(2) : 0} mA`;
+                                        }
+                                        if (ctx.dataset.label.includes('Q点')) {
+                                            return `Q点：Uce=${ctx.label}V, Ic=${ctx.raw.toFixed(2)}mA`;
+                                        }
+                                        return `Ic（Ib=${ibValues[ctx.datasetIndex]}μA）= ${ctx.raw.toFixed(2)} mA`;
+                                    }
+                                }
+                            }
+                        },
+                        tension: 0.2,
+                        animation: {duration: 300}
+                    }
+                });
+            }
+
+            // 生成输入特性曲线数据集
+            function generateInputDatasets(temperature) {
+                const deltaTemp = temperature - 25;
+                const vbeShift = deltaTemp * (-0.0025); // 导通电压温度系数：-2.5mV/℃
+                
+                return vceValues.map((vce, index) => {
+                    const ibValues = vbeData.map(vbe => {
+                        const shiftedVbe = parseFloat(vbe) + vbeShift;
+                        // 电流计算模型
+                        if (shiftedVbe > 1.2) return 30; // 超过Y轴最大值
+                        if (shiftedVbe < 0.4) return 0.05 * Math.exp(40 * (shiftedVbe - 0.4)); // 截止区平缓
+                        const earlyEffectFactor = 1 + vce / 80; // Early效应
+                        const calculatedIb = 8 * Math.exp(35 * (shiftedVbe - 0.7)) / earlyEffectFactor;
+                        return Math.min(calculatedIb, 30); // 将结果限制在Y轴最大值 30 以内
+                    });
+                    
+                    return {
+                        label: `Vce = ${vce} V`,
+                        data: ibValues,
+                        borderColor: inputColors[index],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                        order: 0 // 绘制顺序：负载线之前
+                    };
+                });
+            }
+
+            // 生成输出特性曲线数据集
+            function generateOutputDatasets(temperature) {
+                const deltaTemp = temperature - 25;
+                const betaBase = 125; // 常温β=125
+                const beta = betaBase * (1 + 0.007 * deltaTemp); // β温度系数：0.7%/℃
+                const icboBase = 1;
+                const icbo = icboBase * Math.pow(2, deltaTemp / 10); // Icbo每10℃翻倍
+                
+                return ibValues.map((ib, index) => {
+                    const icValues = uceData.map(uce => {
+                        if (uce < 0.5) return (ib * beta / 1000) * (uce / 0.5); // 饱和区
+                        const ic = (ib * beta + (1 + beta) * icbo) / 1000;
+                        return Math.min(ic, 6); // 不超过Y轴最大值
+                    });
+                    
+                    return {
+                        label: `Ib = ${ib} μA`,
+                        data: icValues,
+                        borderColor: outputColors[index],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                        fill: false,
+                        order: 0 // 绘制顺序：负载线之前
+                    };
+                });
+            }
+
+            // 计算输入Q点（高精度算法）
+            function getInputQDatasets(temperature, inputDatasets, loadLineData) {
+                // 获取Vce=5V曲线数据
+                const qVceIndex = vceValues.findIndex(vce => vce === 5);
+                const curveIbData = inputDatasets[qVceIndex].data;
+                const loadIbData = loadLineData.data;
+                
+                // 找到两线交叉区域的索引范围
+                let crossingIndices = [];
+                for (let i = 1; i < vbeData.length; i++) {
+                    if (curveIbData[i] === null || loadIbData[i] === null || 
+                        curveIbData[i-1] === null || loadIbData[i-1] === null) continue;
+                        
+                    // 检查是否在当前区间内交叉
+                    const curveDiff = curveIbData[i] - loadIbData[i];
+                    const curveDiffPrev = curveIbData[i-1] - loadIbData[i-1];
+                    
+                    if (curveDiff * curveDiffPrev <= 0) {
+                        crossingIndices.push(i);
+                    }
+                }
+                
+                // 如果找到交叉区域，使用线性插值计算精确交点
+                let exactQVbe, exactQIb;
+                if (crossingIndices.length > 0) {
+                    // 取第一个交叉区域
+                    const i = crossingIndices[0];
+                    const x0 = parseFloat(vbeData[i-1]);
+                    const x1 = parseFloat(vbeData[i]);
+                    const y0_curve = curveIbData[i-1];
+                    const y1_curve = curveIbData[i];
+                    const y0_load = loadIbData[i-1];
+                    const y1_load = loadIbData[i];
+                    
+                    // 计算两条线在区间内的交点（线性插值）
+                    // 曲线: y = m1*x + b1
+                    // 负载线: y = m2*x + b2
+                    const m1 = (y1_curve - y0_curve) / (x1 - x0);
+                    const b1 = y0_curve - m1 * x0;
+                    const m2 = (y1_load - y0_load) / (x1 - x0);
+                    const b2 = y0_load - m2 * x0;
+                    
+                    // 解方程求交点
+                    exactQVbe = (b2 - b1) / (m1 - m2);
+                    exactQIb = m1 * exactQVbe + b1;
+                }
+                
+                // 如果没有找到交叉点，使用原始方法找最接近点
+                if (!exactQVbe || !exactQIb) {
+                    let minDiff = Infinity;
+                    let qIndex = 0;
+                    for (let i = 0; i < vbeData.length; i++) {
+                        if (curveIbData[i] === null || loadIbData[i] === null) continue;
+                        const diff = Math.abs(curveIbData[i] - loadIbData[i]);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            qIndex = i;
+                        }
+                    }
+                    exactQVbe = parseFloat(vbeData[qIndex]);
+                    exactQIb = curveIbData[qIndex];
+                }
+                
+                // 构建Q点数据集 - 精确标记交点
+                const qData = new Array(vbeData.length).fill(null);
+                // 找到最接近精确值的索引
+                const closestIndex = vbeData.findIndex(vbe => Math.abs(parseFloat(vbe) - exactQVbe) < 0.001);
+                if (closestIndex !== -1) {
+                    qData[closestIndex] = exactQIb;
+                }
+                
+                return {
+                    label: 'Q点（Vce=5V+负载线）',
+                    data: qData,
+                    borderColor: '#ff0000',
+                    backgroundColor: '#ff0000',
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    pointStyle: 'circle',
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    fill: true,
+                    type: 'scatter',
+                    order: 2, // 最上层
+                    // 存储精确计算的Q点值，用于信息显示
+                    exactQVbe: exactQVbe,
+                    exactQIb: exactQIb
+                };
+            }
+
+            // 计算输出Q点（当前温度下负载线与Ib=20μA曲线交点）
+            function getOutputQDatasets(temperature, outputDatasets, loadLineData) {
+                // 获取Ib=20μA曲线数据
+                const qIbIndex = ibValues.findIndex(ib => ib === 20);
+                const curveIcData = outputDatasets[qIbIndex].data;
+                const loadIcData = loadLineData.data;
+                
+                // 找到两数组数值最接近的索引（交点）
+                let minDiff = Infinity;
+                let qIndex = 0;
+                for (let i = 0; i < uceData.length; i++) {
+                    if (curveIcData[i] === null || loadIcData[i] === null) continue;
+                    const diff = Math.abs(curveIcData[i] - loadIcData[i]);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        qIndex = i;
+                    }
+                }
+                
+                // 构建Q点数据集
+                const qData = new Array(uceData.length).fill(null);
+                qData[qIndex] = curveIcData[qIndex];
+                
+                return {
+                    label: 'Q点（Ib=20μA+负载线）',
+                    data: qData,
+                    borderColor: '#ff0000',
+                    backgroundColor: '#ff0000',
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    pointStyle: 'circle',
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    fill: true,
+                    type: 'scatter',
+                    order: 2 // 最上层
+                };
+            }
+
+            // 更新状态、电阻值、Q点信息
+            function updateStatusAndParams(temp, RbCurrent, RcCurrent, inputQDatasets, outputQDatasets) {
+                // 更新温度状态
+                const statusDesc = temp < 0 
+                    ? `低温(${temp}℃) - 电阻减小（负载线变陡），输入Q点右移，输出Q点下移`
+                    : temp > 60 
+                        ? `高温(${temp}℃) - 电阻增大（负载线变平缓），输入Q点左移，输出Q点上移`
+                        : `常温(${temp}℃) - 特性稳定，负载线与Q点匹配设计值`;
+                statusText.textContent = statusDesc;
+                
+                // 更新当前电阻值
+                const RbKohm = (RbCurrent / 1000).toFixed(1);
+                const RcKohm = (RcCurrent / 1000).toFixed(2);
+                resistorInfo.textContent = `Rb≈${RbKohm}kΩ（α=0.002/℃），Rc≈${RcKohm}kΩ（α=0.002/℃）`;
+                
+                // 更新输入Q点信息 - 使用精确计算值
+                if (inputQDatasets.exactQVbe !== undefined && inputQDatasets.exactQIb !== undefined) {
+                    const inputQVbe = inputQDatasets.exactQVbe.toFixed(3);
+                    const inputQIb = inputQDatasets.exactQIb.toFixed(2);
+                    inputQInfo.textContent = `Vbe≈${inputQVbe}V，Ib≈${inputQIb}μA（负载线与Vce=5V曲线交点）`;
+                } else {
+                    const inputQIndex = inputQDatasets.data.findIndex(val => val !== null);
+                    if (inputQIndex !== -1 && inputQDatasets.data[inputQIndex] !== null) {
+                        const inputQVbe = vbeData[inputQIndex];
+                        const inputQIb = inputQDatasets.data[inputQIndex].toFixed(1);
+                        inputQInfo.textContent = `Vbe≈${inputQVbe}V，Ib≈${inputQIb}μA（负载线与Vce=5V曲线交点）`;
+                    } else {
+                        inputQInfo.textContent = 'Q点未找到';
+                    }
+                }
+                
+                // 更新输出Q点信息
+                const outputQIndex = outputQDatasets.data.findIndex(val => val !== null);
+                const outputQUce = uceData[outputQIndex].toFixed(1);
+                const outputQIc = outputQDatasets.data[outputQIndex].toFixed(2);
+                const beta = (outputQIc * 1000 / 20).toFixed(0); // β=Ic/Ib（Ib=20μA）
+                outputQInfo.textContent = `Uce=${outputQUce}V，Ic≈${outputQIc}mA（β≈${beta}，负载线与Ib=20μA曲线交点）`;
+            }
+
+            // 初始化参数与Q点信息（常温25℃）
+            const [initRb, initRc] = calculateResistorAtTemp(25);
+            const initInputLoadLineData = generateInputLoadLineData(25);
+            const initInputDCLoadLineData = generateInputDCLoadLineData(25); // 初始化直流负载线
+            const initInputDatasets = generateInputDatasets(25);
+            const initInputQDatasets = getInputQDatasets(25, initInputDatasets, initInputLoadLineData);
+            const initOutputLoadLineData = generateOutputLoadLineData(25);
+            const initOutputDatasets = generateOutputDatasets(25);
+            const initOutputQDatasets = getOutputQDatasets(25, initOutputDatasets, initOutputLoadLineData);
+            updateStatusAndParams(25, initRb, initRc, initInputQDatasets, initOutputQDatasets);
+        });
+    </script>
+    
+</body>
+</html>
